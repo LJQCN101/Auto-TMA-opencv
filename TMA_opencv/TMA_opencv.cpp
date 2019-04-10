@@ -135,9 +135,6 @@ int main()
     Mat gray;
     cvtColor(img, gray, COLOR_BGR2GRAY);
 
-    Mat filtered;
-    bilateralFilter(gray, filtered, 1, 80, 11);
-
     Mat edges;
     Canny(gray, edges, 300, 350);
 

@@ -20,6 +20,8 @@ double target_x2;
 double target_y1;
 double target_y2;
 
+double speed_pixel = 0.0;
+
 bool isEqual(const Vec4i& _l1, const Vec4i& _l2)
 {
     Vec4i l1(_l1), l2(_l2);
@@ -135,6 +137,9 @@ int main()
     Mat gray;
     cvtColor(img, gray, COLOR_BGR2GRAY);
 
+    Mat filtered;
+    bilateralFilter(gray, filtered, 1, 80, 11);
+
     Mat edges;
     Canny(gray, edges, 300, 350);
 
@@ -189,10 +194,15 @@ int main()
     namedWindow("TMA", WINDOW_AUTOSIZE);
     imshow("TMA", img);
 
-    cout << "Please input sorting index for each line in light blue. First bearing should be 0, second bearing should be 1, etc." << endl;
+    cout << "Please input sorting index for each random line highlighted in light blue. First bearing should be 0, second bearing should be 1, etc." << endl;
     cout << "If the line is invalid, please enter a negative number." << endl;
     cout << "" << endl;
+    cout << "NEW: If the line is a TMA ruler, please enter its speed i.e. '15kn' or '13knots' or '7kts', in order to apply speed contraint." << endl;
+    cout << "----------------------------------------------" << endl;
+    string _input;
     int _index;
+    int _speed = -1;
+    double length_speed = 0.0;
 
     for (Vec4i &reduced : reducedLines) {
         double x1 = reduced[0];
@@ -207,18 +217,35 @@ int main()
 
         double bearing3 = 180.0 - atan2(x1 - x2, y1 - y2) * 180.0 / CV_PI;
 
-        cout << "Index for this line: ";
-        cin >> _index;
+        cout << "Index / speed (if applicable) for this line: ";
+        cin >> _input;
         cout << endl;
 
+        try
+        {
+            if (_input.find("kn") != string::npos || _input.find("kt") != string::npos)
+            {
+                _index = -1;
+                _speed = stoi(_input);
+            }
+            else
+            {
+                _index = stoi(_input);
+                _speed = -1;
+            }
+        }
+        catch (...) {
+            _index = -1;
+            _speed = -1;
+        }
 
         if (_index >= 0)
         {
             m[_index] = x2;
             n[_index] = img.cols - y2;
             bearing[_index] = bearing3;
-            recording_time[_index] = _index * 120.0;
-            putText(img, to_string(_index), Point((int)(x1 + x2) / 2.0, (int)(y1 + y2) / 2.0), 1, 2.0, Scalar(255, 255, 0));
+            recording_time[_index] = _index * 10.0;
+            putText(img, to_string(_index), Point((int)(x1 + x2) / 2.0, (int)(y1 + y2) / 2.0), 1, 1.5, Scalar(255, 255, 0));
             imshow("TMA", img);
 
             if (_index > _j)
@@ -226,40 +253,101 @@ int main()
                 _j = _index;
             }
         }
+
+        if (_speed > 0)
+        {
+            length_speed = sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2));
+            putText(img, _input, Point((int)(x1 + x2) / 2.0, (int)(y1 + y2) / 2.0), 1, 1.3, Scalar(255, 255, 0));
+            imshow("TMA", img);
+        }
     }
 
-    column_vector starting_point = { 1000.0,1.0,0.0 };
+    speed_pixel = length_speed / (_j * 10.0);
+    column_vector starting_point = { 100.0,1.0,0.0 };
+
+    auto target_function_speed_fixed = [](const column_vector& mStartingPoint)
+    {
+        const double L1_distance = mStartingPoint(0);
+        const double spd = speed_pixel;
+        const double crs = mStartingPoint(1);
+
+        double u = spd * sin(crs * deg_to_rad);
+        double v = spd * cos(crs * deg_to_rad);
+        double a = m[0] + L1_distance * sin(bearing[0] * deg_to_rad);
+        double b = n[0] + L1_distance * cos(bearing[0] * deg_to_rad);
+
+        double total_error = 0.0;
+
+        for (int i = 0; i < _j + 1; i++)
+        {
+            double x = a + u * recording_time[i];
+            double y = b + v * recording_time[i];
+            double line_error = (y - n[i]) * sin(bearing[i] * deg_to_rad) - (x - m[i]) * cos(bearing[i] * deg_to_rad);
+            total_error += pow(line_error, 2);
+        }
+        return total_error;
+    };
 
     //multiple starting point for BFGS algorithm to find for multiple local minimal. (We need to keep all possible results for TMA)
 
-    for (double L1_distance = 1000.0; L1_distance <= 5000.0; L1_distance += 1000.0)
+    for (double L1_distance = 100.0; L1_distance <= 1000.0; L1_distance += 100.0)
     {
-        for (double spd = 1.0; spd < 10.0; spd += 2.0)
+        for (double spd = 1.0; spd < 30.0; spd += 5.0)
         {
             for (double crs = 0.0; crs <= 360.0; crs += 60.0)
             {
-                starting_point = { L1_distance,spd,crs };
-
-                dlib::find_min_using_approximate_derivatives(dlib::bfgs_search_strategy(), dlib::objective_delta_stop_strategy(1e-7), target_function, starting_point, -1);
-                double total_error = calculate_error(starting_point(0), starting_point(1), starting_point(2));
-
-                //adjust course result within 0-360 range
-                while (starting_point(2) < 0)
+                if (speed_pixel > 0.0)
                 {
-                    starting_point(2) += 360;
+                    
+                    starting_point = { L1_distance,crs };
                 }
+                else starting_point = { L1_distance,spd,crs };
 
-                while (starting_point(2) >= 360)
+                if (speed_pixel == 0.0)
                 {
-                    starting_point(2) -= 360;
+                    dlib::find_min_using_approximate_derivatives(dlib::bfgs_search_strategy(), dlib::objective_delta_stop_strategy(1e-7), target_function, starting_point, -1);
+                    double total_error = calculate_error(starting_point(0), starting_point(1), starting_point(2));
+
+                    //adjust course result within 0-360 range
+                    while (starting_point(2) < 0)
+                    {
+                        starting_point(2) += 360;
+                    }
+
+                    while (starting_point(2) >= 360)
+                    {
+                        starting_point(2) -= 360;
+                    }
+
+                    starting_point(2) = round(starting_point(2) * 100.0) / 100.0;
+
+                    if (starting_point(1) > 0) {
+                        line(img, Point(target_x1, img.cols - target_y1), Point(target_x2, img.cols - target_y2), Scalar(0, 255, 0), 1, LINE_AA);
+                        imshow("TMA", img);
+                        cout << "target course: " << starting_point(2) << "deg, error: " << total_error << " squared pixel." << endl;
+                    }
                 }
+                else
+                {
+                    dlib::find_min_using_approximate_derivatives(dlib::bfgs_search_strategy(), dlib::objective_delta_stop_strategy(1e-7), target_function_speed_fixed, starting_point, -1);
+                    double total_error = calculate_error(starting_point(0), speed_pixel, starting_point(1));
 
-                starting_point(2) = round(starting_point(2) * 100.0) / 100.0;
+                    //adjust course result within 0-360 range
+                    while (starting_point(1) < 0)
+                    {
+                        starting_point(1) += 360;
+                    }
 
-                if (starting_point(1) > 0) {
+                    while (starting_point(1) >= 360)
+                    {
+                        starting_point(1) -= 360;
+                    }
+
+                    starting_point(1) = round(starting_point(1) * 100.0) / 100.0;
+
                     line(img, Point(target_x1, img.cols - target_y1), Point(target_x2, img.cols - target_y2), Scalar(0, 255, 0), 1, LINE_AA);
                     imshow("TMA", img);
-                    cout << "target course: " << starting_point(2) << "deg, error: " << total_error << " squared m." << endl;
+                    cout << "target course: " << starting_point(1) << "deg, error: " << total_error << " squared pixel." << endl;
                 }
             }
         }

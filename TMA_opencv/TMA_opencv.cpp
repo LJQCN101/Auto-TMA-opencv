@@ -23,6 +23,15 @@ double target_y2;
 double speed_pixel_per_second = 0.0;
 double spps_constraint = 0.0;
 
+template <typename T>
+std::string to_string_with_precision(const T a_value, const int n = 1)
+{
+    std::ostringstream out;
+    out.precision(n);
+    out << std::fixed << a_value;
+    return out.str();
+}
+
 bool isEqual(const Vec4i& _l1, const Vec4i& _l2)
 {
     Vec4i l1(_l1), l2(_l2);
@@ -343,7 +352,7 @@ int main()
                         cout << "target course: " << starting_point(2) << "deg, speed: " << starting_point(1) << " pixel/s, error: " << total_error << " squared pixel." << endl;
                         if (_speed > 0)
                         {
-                            putText(img, to_string((int)(starting_point(1) * s_spps_ratio)) + "kn", Point(target_x2 + 5.0, img.cols - target_y2), 1, 1.0, Scalar(0, 255, 0));
+                            putText(img, to_string_with_precision(starting_point(1) * s_spps_ratio) + "kn", Point(target_x2 + 5.0, img.cols - target_y2), 1, 1.0, Scalar(0, 255, 0));
                         }
                     }
                 }

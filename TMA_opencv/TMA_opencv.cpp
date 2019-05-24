@@ -20,7 +20,8 @@ double target_x2;
 double target_y1;
 double target_y2;
 
-double speed_pixel = 0.0;
+double speed_pixel_per_second = 0.0;
+double spps_constraint = 0.0;
 
 bool isEqual(const Vec4i& _l1, const Vec4i& _l2)
 {
@@ -197,7 +198,7 @@ int main()
     cout << "Please input sorting index for each random line highlighted in light blue. First bearing should be 0, second bearing should be 1, etc." << endl;
     cout << "If the line is invalid, please enter a negative number." << endl;
     cout << "" << endl;
-    cout << "NEW: If the line is a TMA ruler, please enter its speed i.e. '15kn' or '13knots' or '7kts', in order to apply speed contraint." << endl;
+    cout << "NEW: If the line is a TMA ruler, please enter its speed with units, i.e. '15kn' or '13knots' or '7kts', in order to do speed calculation." << endl;
     cout << "----------------------------------------------" << endl;
     string _input;
     int _index;
@@ -231,12 +232,10 @@ int main()
             else
             {
                 _index = stoi(_input);
-                _speed = -1;
             }
         }
         catch (...) {
             _index = -1;
-            _speed = -1;
         }
 
         if (_index >= 0)
@@ -262,13 +261,31 @@ int main()
         }
     }
 
-    speed_pixel = length_speed / (_j * 10.0);
+    waitKey(100);
+
+    speed_pixel_per_second = length_speed / (_j * 10.0);
+    double s_spps_ratio = (1.0 * _speed) / speed_pixel_per_second;
+    double spps_s_ratio = speed_pixel_per_second / (1.0 * _speed);
+
+    if (speed_pixel_per_second > 0.0)
+    {
+        cout << "Speed constraint value (enter negative to skip): ";
+        cin >> _input;
+        cout << endl;
+
+        if(stod(_input) > 0)
+        {
+            spps_constraint = stod(_input) * spps_s_ratio;
+        }
+       
+    }
+
     column_vector starting_point = { 100.0,1.0,0.0 };
 
     auto target_function_speed_fixed = [](const column_vector& mStartingPoint)
     {
         const double L1_distance = mStartingPoint(0);
-        const double spd = speed_pixel;
+        const double spd = spps_constraint;
         const double crs = mStartingPoint(1);
 
         double u = spd * sin(crs * deg_to_rad);
@@ -290,20 +307,19 @@ int main()
 
     //multiple starting point for BFGS algorithm to find for multiple local minimal. (We need to keep all possible results for TMA)
 
-    for (double L1_distance = 100.0; L1_distance <= 1000.0; L1_distance += 100.0)
+    for (double L1_distance = 50.0; L1_distance <= 550.0; L1_distance += 50.0)
     {
         for (double spd = 1.0; spd < 30.0; spd += 5.0)
         {
             for (double crs = 0.0; crs <= 360.0; crs += 60.0)
             {
-                if (speed_pixel > 0.0)
+                if (spps_constraint > 0.0)
                 {
-                    
                     starting_point = { L1_distance,crs };
                 }
                 else starting_point = { L1_distance,spd,crs };
 
-                if (speed_pixel == 0.0)
+                if (spps_constraint == 0.0)
                 {
                     dlib::find_min_using_approximate_derivatives(dlib::bfgs_search_strategy(), dlib::objective_delta_stop_strategy(1e-7), target_function, starting_point, -1);
                     double total_error = calculate_error(starting_point(0), starting_point(1), starting_point(2));
@@ -324,13 +340,17 @@ int main()
                     if (starting_point(1) > 0) {
                         line(img, Point(target_x1, img.cols - target_y1), Point(target_x2, img.cols - target_y2), Scalar(0, 255, 0), 1, LINE_AA);
                         imshow("TMA", img);
-                        cout << "target course: " << starting_point(2) << "deg, error: " << total_error << " squared pixel." << endl;
+                        cout << "target course: " << starting_point(2) << "deg, speed: " << starting_point(1) << " pixel/s, error: " << total_error << " squared pixel." << endl;
+                        if (_speed > 0)
+                        {
+                            putText(img, to_string((int)(starting_point(1) * s_spps_ratio)) + "kn", Point(target_x2 + 5.0, img.cols - target_y2), 1, 1.0, Scalar(0, 255, 0));
+                        }
                     }
                 }
                 else
                 {
                     dlib::find_min_using_approximate_derivatives(dlib::bfgs_search_strategy(), dlib::objective_delta_stop_strategy(1e-7), target_function_speed_fixed, starting_point, -1);
-                    double total_error = calculate_error(starting_point(0), speed_pixel, starting_point(1));
+                    double total_error = calculate_error(starting_point(0), spps_constraint, starting_point(1));
 
                     //adjust course result within 0-360 range
                     while (starting_point(1) < 0)

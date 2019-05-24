@@ -11,6 +11,7 @@
 
 // TODO: add headers that you want to pre-compile here
 #include <iostream>
+#include <sstream>
 #include <numeric>
 #include <math.h>
 #include <vector>

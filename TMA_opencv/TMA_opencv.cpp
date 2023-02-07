@@ -26,11 +26,11 @@ double speed_pixel_per_second = 0.0;
 double spps_constraint = 0.0;
 
 template <typename T>
-std::string to_string_with_precision(const T a_value, const int n = 1)
+string to_string_with_precision(const T a_value, const int n = 1)
 {
-    std::ostringstream out;
+    ostringstream out;
     out.precision(n);
-    out << std::fixed << a_value;
+    out << fixed << a_value;
     return out.str();
 }
 
@@ -81,9 +81,9 @@ double calculate_error(const double &L1_distance, const double &spd, const doubl
 
     target_x1 = a;
     target_y1 = b;
-    target_x2 = a + u * 1.0 * _j;
-    target_y2 = b + v * 1.0 * _j;
-    
+    int max_idx = *max_element(recording_time.begin(), recording_time.end());
+    target_x2 = a + u * 1.0 * max_idx;
+    target_y2 = b + v * 1.0 * max_idx;
 
     double total_error = 0.0;
 
@@ -171,16 +171,17 @@ int main()
     }
 
     //draw a new line through point clouds
-    vector<cv::Vec4i> reducedLines = std::accumulate(pointClouds.begin(), pointClouds.end(), vector<cv::Vec4i>{}, [](vector<cv::Vec4i> target, const vector<cv::Point2i>& _pointCloud) {
+    vector<cv::Vec4i> reducedLines = accumulate(pointClouds.begin(), pointClouds.end(), vector<cv::Vec4i>{}, [](vector<cv::Vec4i> target, const vector<cv::Point2i>& _pointCloud) {
         vector<cv::Point2i> pointCloud = _pointCloud;
 
         //lineParams: [vx,vy, x0,y0]: (normalized vector, point on our contour)
         // (x,y) = (x0,y0) + t*(vx,vy), t -> (-inf; inf)
-        cv::Vec4f lineParams; fitLine(pointCloud, lineParams, cv::DIST_L2, 0, 0.01, 0.01);
+        cv::Vec4f lineParams;
+        fitLine(pointCloud, lineParams, cv::DIST_L2, 0, 0.01, 0.01);
 
         // derive the bounding xs of point cloud
         decltype(pointCloud)::iterator minXP, maxXP;
-        std::tie(minXP, maxXP) = std::minmax_element(pointCloud.begin(), pointCloud.end(), [](const cv::Point2i& p1, const cv::Point2i& p2) { return p1.x < p2.x; });
+        tie(minXP, maxXP) = minmax_element(pointCloud.begin(), pointCloud.end(), [](const cv::Point2i& p1, const cv::Point2i& p2) { return p1.x < p2.x; });
 
         // derive y coords of fitted line
         float m = lineParams[1] / lineParams[0];
@@ -253,11 +254,10 @@ int main()
 
         if (_index == 0)
         {
-            auto _it = std::find(begin(_indexes), end(_indexes), _index);
+            auto _it = find(begin(_indexes), end(_indexes), _index);
             //checking the condition based on the ¡®it¡¯ result whether the element is present or not
             if (_it != end(_indexes))
             {
-                cout << "Find element";
                 m.push_back(x2);
                 n.push_back(img.cols - y2);
                 bearing.push_back(bearing3);
@@ -269,7 +269,6 @@ int main()
             }
             else
             {
-                cout << "Not Find element";
                 m_0 = x2;
                 n_0 = img.cols - y2;
                 bearing_0 = bearing3;

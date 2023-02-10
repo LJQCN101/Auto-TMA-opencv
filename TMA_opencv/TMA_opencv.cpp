@@ -215,13 +215,13 @@ int main()
     cout << "----------------------------------------------" << endl;
 
     string _input;
-    int _speed = -1;
+    int speed = -1;
     double length_speed = 0.0;
     vector<int> _indexes;
 
     for (cv::Vec4i &reduced : reducedLines) {
         int _index = -1;
-
+        int _speed = -1;
         double x1 = reduced[0];
         double y1 = reduced[1];
         double x2 = reduced[2];
@@ -292,8 +292,9 @@ int main()
 
         _indexes.push_back(_index);
 
-        if (_speed > 0)
+        if (_speed > 0 && speed != _speed)
         {
+            speed = _speed;
             length_speed = sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2));
             putText(img, _input, cv::Point((int)(x1 + x2) / 2.0, (int)(y1 + y2) / 2.0), 1, 1.3, cv::Scalar(255, 255, 0));
             cv::imshow("TMA", img);
@@ -301,9 +302,10 @@ int main()
         }
     }
 
-    speed_pixel_per_second = length_speed * 1.0 / _j;
-    double s_spps_ratio = (1.0 * _speed) / speed_pixel_per_second;
-    double spps_s_ratio = speed_pixel_per_second / (1.0 * _speed);
+    int max_idx = *max_element(recording_time.begin(), recording_time.end());
+    speed_pixel_per_second = length_speed * 1.0 / max_idx;
+    double s_spps_ratio = (1.0 * speed) / speed_pixel_per_second;
+    double spps_s_ratio = speed_pixel_per_second / (1.0 * speed);
 
     if (speed_pixel_per_second > 0.0)
     {
@@ -377,10 +379,16 @@ int main()
                     if (starting_point(1) > 0) {
                         line(img, cv::Point(target_x1, img.cols - target_y1), cv::Point(target_x2, img.cols - target_y2), cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
                         cv::imshow("TMA", img);
-                        cout << "target course: " << starting_point(2) << "deg, speed: " << starting_point(1) << " pixel/s, error: " << total_error << " squared pixel." << endl;
-                        if (_speed > 0)
+                        
+                        if (speed > 0)
                         {
-                            putText(img, to_string_with_precision(starting_point(1) * s_spps_ratio) + "kn", cv::Point(target_x2 + 5.0, img.cols - target_y2), 1, 1.0, cv::Scalar(0, 255, 0));
+                            string speed_ktd_str = to_string_with_precision(starting_point(1) * s_spps_ratio) + "kn";
+                            putText(img, speed_ktd_str, cv::Point(target_x2 + 5.0, img.cols - target_y2), 1, 1.0, cv::Scalar(0, 255, 0));
+                            cout << "target course: " << starting_point(2) << "deg, speed: " << speed_ktd_str << ", error: " << total_error << " squared pixel." << endl;
+                        }
+                        else
+                        {
+                            cout << "target course: " << starting_point(2) << "deg, speed: " << starting_point(1) << " pixel/s, error: " << total_error << " squared pixel." << endl;
                         }
                     }
                 }
